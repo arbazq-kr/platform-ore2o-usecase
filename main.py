@@ -100,20 +100,26 @@ def clean_short_description(short_description):
 #  Used for Layer 2 exact matching
 # ══════════════════════════════════════════════════════════
 
-def clean_description(description):
+def clean_description(description,  short_desc):
     """
     Clean description:
     1. Remove URLs
     2. Remove special characters
     3. Strip extra whitespace
     4. Return full cleaned text (no truncation)
+    5. Removes short description
     Used for Layer 2 exact sub-group matching
     """
     if not description or description == "":
         return None
 
     text = re.sub(r'http[s]?://\S+', '', description)
-    text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
+    text = re.sub(r'\n+', ', ', text)
+
+    if short_desc:
+        text = text.replace(short_desc, "")
+
+    text = re.sub(r'[^a-zA-Z0-9\s%*\-._:]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
 
     return text if text else None
@@ -277,7 +283,7 @@ def build_dataframe(datax):
             raw_short_description,
             clean_short_description(raw_short_description),
             raw_description,
-            clean_description(raw_description),
+            clean_description(raw_description, clean_short_description(raw_short_description)),
             inc.get('work_notes',       ''),
             inc.get('sys_created_on',   None),
             inc.get('contact_type',     ''),
@@ -288,8 +294,8 @@ def build_dataframe(datax):
     df = pd.DataFrame(rows, columns=columns)
 
     print(f"📋 DataFrame created with {len(df)} rows")
-    print(f"\n📋 Sample:")
-    print(df[['number', 'clean_short_description']].head(20))
+    #print(f"\n📋 Sample:")
+    #print(df[['number', 'clean_short_description']].head(20))
 
     return df
 
