@@ -14,6 +14,12 @@ Layer 1 → Semantic similarity on short_description (broad match, threshold 0.8
 Layer 2 → Semantic similarity on description (exact match, threshold 0.90)
 """
 
+"""
+Install Required Libraries:
+Run this once before running the code:
+pip install sentence-transformers scikit-learn torch
+"""
+
 import requests
 import re
 import os
