@@ -42,7 +42,17 @@ querystring = {
         "7cd3576c1b1a4d508611caa3604bcbfa,"
         "2755644847883e54ed0faf4a216d4396,"
         "194f6bb0c3c37290f792031ad00131a4,"
-        "dc8c9dfe1b160d10684965f3604bcbea"
+        "dc8c9dfe1b160d10684965f3604bcbea,"
+        "0f701b6ac3ac1110993c251ce0013143,"
+        "27db9dbe1b160d10684965f3604bcbb2,"
+        "507dd5a11b928910684965f3604bcb2a,"
+        "6cdd0c191b5a8d908611caa3604bcbcc,"
+        "3c76dba01b5a4d508611caa3604bcb0e,"
+        "089e53b5470511d0449ce8da436d4391,"
+        "b9add5e11b928910684965f3604bcb19,"
+        "0adc99d147e77a10d4140738436d4360,"
+        "3cdfd7f9470511d0449ce8da436d4358,"
+        "3f7bda2597811d90162df5b71153aff3"
         "^active=true"
         "^stateIN2,4,5"
         "^ORDERBYDESCsys_created_on"
@@ -55,7 +65,7 @@ querystring = {
         "assigned_to,sys_created_on,work_notes,"
         "contact_type,u_secure_type"
     ),
-    "sysparm_limit":                 "100",
+    "sysparm_limit":                 "1000",
     "sysparm_exclude_reference_link":"true"
 }
 
