@@ -12,6 +12,9 @@ Link all other incidents in group to this second oldest (chosen parent).
 UPDATED: Two-layer matching now AI-based using sentence-transformers:
 Layer 1 → Semantic similarity on short_description (broad match, threshold 0.85)
 Layer 2 → Semantic similarity on description (exact match, threshold 0.90)
+9o
+UPDATED: Alert-based filtering now done at API level via contact_type=event
+         Removed is_alert_based() and filter_alert_incidents() as no longer needed
 """
 
 """
@@ -62,6 +65,7 @@ querystring = {
         "3cdfd7f9470511d0449ce8da436d4358,"
         "3f7bda2597811d90162df5b71153aff3"
         "^active=true"
+        "^contact_type=event"
         "^stateIN2,4,5"
         "^ORDERBYDESCsys_created_on"
     ),
@@ -77,6 +81,12 @@ querystring = {
     "sysparm_exclude_reference_link":"true"
 }
 
+# ──────────────────────────────────────────────────────────
+#  NOTE: contact_type=event is added in sysparm_query above
+#  This filters alert-based incidents at the API level
+#  So no need to filter them again in Python code
+# ──────────────────────────────────────────────────────────
+
 columns = [
     "number", "sys_id", "active",
     "state", "configuration_item", "u_ci_name",
@@ -91,7 +101,7 @@ columns = [
 # ──────────────────────────────────────────────────────────
 #  AI SIMILARITY THRESHOLDS
 #  Layer 1 → short_description similarity threshold
-#            0.85 means 85% similar to be grouped together
+#            0.95 means 95% similar to be grouped together
 #            Lower  = more groups (less strict)
 #            Higher = fewer groups (more strict)
 #  Layer 2 → description similarity threshold
@@ -99,7 +109,7 @@ columns = [
 #            Higher than Layer 1 because description is longer
 #            and should be more precisely matched
 # ──────────────────────────────────────────────────────────
-LAYER1_THRESHOLD = 0.85
+LAYER1_THRESHOLD = 0.95
 LAYER2_THRESHOLD = 0.90
 
 
@@ -155,20 +165,6 @@ def clean_description(description, short_desc):
     text = re.sub(r'\s+', ' ', text).strip()
 
     return text if text else None
-
-
-# ══════════════════════════════════════════════════════════
-#  FUNCTION: IS ALERT BASED INCIDENT
-# ══════════════════════════════════════════════════════════
-
-def is_alert_based(contact_type, u_secure_type):
-    contact = str(contact_type).strip().lower() if contact_type else ""
-    secure  = str(u_secure_type).strip()        if u_secure_type else ""
-    is_event        = contact == "event"
-    is_secure_empty = secure == "" or secure.upper() == "NONE"
-    if is_event and is_secure_empty:
-        return True
-    return False
 
 
 # ══════════════════════════════════════════════════════════
@@ -313,8 +309,10 @@ def get_ai_similarity_groups(df_subset, text_column, threshold, model):
 
     Args:
         df_subset    → DataFrame slice to group
-        text_column  → column name to use for similarity ('clean_short_description' or 'clean_description')
-        threshold    → minimum similarity score to consider as same group (0.0 to 1.0)
+        text_column  → column name to use for similarity
+                       ('clean_short_description' or 'clean_description')
+        threshold    → minimum similarity score to consider as same group
+                       (0.0 to 1.0)
         model        → loaded SentenceTransformer model
 
     Returns:
@@ -395,17 +393,20 @@ def fetch_incidents():
     """
     Fetches incidents from ServiceNow API
     Returns raw list of incident dicts
+    Only alert-based incidents are fetched
+    because contact_type=event is set in sysparm_query
     """
     print(f"\n{'='*65}")
     print(f"   🚀 INCIDENT PARENT-CHILD LINKER")
     print(f"{'='*65}")
-    print(f"\n🔄 Fetching incidents from ServiceNow...")
+    print(f"\n🔄 Fetching alert-based incidents from ServiceNow...")
+    #print(f"   Filter : contact_type = event (API level)")
 
     response = requests.get(url, headers=headers, params=querystring)
     data     = response.json()
     datax    = data['result']
 
-    print(f"✅ Fetched {len(datax)} incidents")
+    print(f"✅ Fetched {len(datax)} alert-based incidents")
 
     return datax
 
@@ -441,7 +442,10 @@ def build_dataframe(datax):
             raw_short_description,
             clean_short_description(raw_short_description),
             raw_description,
-            clean_description(raw_description, clean_short_description(raw_short_description)),
+            clean_description(
+                raw_description,
+                clean_short_description(raw_short_description)
+            ),
             inc.get('work_notes',       ''),
             inc.get('sys_created_on',   None),
             inc.get('contact_type',     ''),
@@ -456,59 +460,6 @@ def build_dataframe(datax):
     #print(df[['number', 'clean_short_description']].head(20))
 
     return df
-
-
-# ══════════════════════════════════════════════════════════
-#  FUNCTION: STEP 2.5 → FILTER ALERT BASED INCIDENTS ONLY
-# ══════════════════════════════════════════════════════════
-
-def filter_alert_incidents(df):
-    """
-    Filters DataFrame to keep only alert-based incidents
-    Prints summary of filtered and skipped incidents
-    Returns filtered DataFrame with only alert-based incidents
-    """
-    print(f"\n{'='*65}")
-    print(f"🔍 Filtering Alert-Based Incidents Only...")
-    print(f"{'='*65}")
-
-    df['is_alert'] = df.apply(
-        lambda row: is_alert_based(
-            row['contact_type'],
-            row['u_secure_type']
-        ),
-        axis=1
-    )
-
-    alert_df   = df[df['is_alert'] == True].copy()
-    skipped_df = df[df['is_alert'] == False].copy()
-
-    print(f"\n📊 Filtering Summary:")
-    print(f"   Total Fetched   : {len(df)}")
-    print(f"   ✅ Alert Based  : {len(alert_df)}")
-    print(f"   🚫 Skipped      : {len(skipped_df)}")
-
-    if not skipped_df.empty:
-        print(f"\n   🚫 Skipped Incidents:")
-        #print(f"   {'INC Number':<15} {'contact_type':<15} {'u_secure_type'}")
-        print(f"   {'-'*50}")
-        tempArray = []
-        for _, row in skipped_df.iterrows():
-            #print(f"   {row['number']:<15} {row['contact_type']:<15} {row['u_secure_type']}")
-            tempArray.append(row['number'])
-        print(tempArray)
-
-    if not alert_df.empty:
-        print(f"\n   ✅ Alert Based Incidents:")
-        #print(f"   {'INC Number':<15} {'contact_type':<15} {'u_secure_type'}")
-        print(f"   {'-'*50}")
-        tempArray = []
-        for _, row in alert_df.iterrows():
-            #print(f"   {row['number']:<15} {row['contact_type']:<15} {row['u_secure_type']}")
-            tempArray.append(row['number'])
-        print(tempArray)
-
-    return alert_df
 
 
 # ══════════════════════════════════════════════════════════
@@ -1017,7 +968,7 @@ def find_and_link_similar_incidents(df, model):
             for _, row in l1_without_desc.iterrows():
                 print(f"      → {row['number']} (skipped from sub-grouping)")
 
-        print(f"\n   🤖 Running Layer 2 AI Similarity on description...")
+        #print(f"\n   🤖 Running Layer 2 AI Similarity on description...")
 
         # Get AI similarity groups for Layer 2
         # Only within this Layer 1 group (not all incidents)
@@ -1054,7 +1005,7 @@ def find_and_link_similar_incidents(df, model):
                 total_l2_groups  = total_l2_groups
             )
 
-        print(f"{'='*65}")
+        #print(f"{'='*65}")
 
 
 # ══════════════════════════════════════════════════════════
@@ -1067,9 +1018,9 @@ def main():
     Orchestrates all steps:
     1. Load AI model
     2. Fetch incidents from ServiceNow
+       (only alert-based via contact_type=event at API level)
     3. Build DataFrame
-    4. Filter alert-based incidents only
-    5. Find similar incidents using AI and link parent-child
+    4. Find similar incidents using AI and link parent-child
     """
 
     # ─── STEP 0: Load AI Model ────────────────────────────
@@ -1078,19 +1029,22 @@ def main():
     model = load_ai_model()
 
     # ─── STEP 1: Fetch from ServiceNow ────────────────────
+    # Only alert-based incidents fetched
+    # contact_type=event filter applied at API level
     datax = fetch_incidents()
+
+    if not datax:
+        print(f"\n✅ No alert-based incidents found. Nothing to process!")
+        return
 
     # ─── STEP 2: Build DataFrame ──────────────────────────
     df = build_dataframe(datax)
 
-    # ─── STEP 2.5: Filter Alert Based Incidents Only ──────
-    df = filter_alert_incidents(df)
-
     if df.empty:
-        print(f"\n✅ No alert-based incidents found. Nothing to process!")
+        print(f"\n✅ DataFrame is empty. Nothing to process!")
         return
 
-    print(f"\n✅ Processing {len(df)} alert-based incidents...")
+    #print(f"\n✅ Processing {len(df)} alert-based incidents...")
 
     # ─── STEP 3: Find Similar + Link Parent-Child ─────────
     # Pass model so AI similarity can be computed
@@ -1102,7 +1056,7 @@ def main():
 
     print(f"\n{'='*65}")
     print(f"   ✅ ALL DONE!")
-    print(f"   → Incidents fetched from ServiceNow")
+    print(f"   → Alert-based incidents fetched from ServiceNow")
     print(f"   → Similar incidents identified using AI")
     print(f"   → Parent-Child links created in ServiceNow")
     print(f"{'='*65}")
