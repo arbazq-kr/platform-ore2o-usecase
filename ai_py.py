@@ -1,21 +1,4 @@
-"""
-DEV NOTES: ARBAZ QURESHI (TTC4624)
-This is a test script, which fetches data from ServiceNow api,
-creates dataframe of incidents,
-Groups them based on first 50 cleaned characters of short description (clean_description),
-before linking asks user permission, and links if yes.
-FIXED: Now correctly identifies parent by checking if parent exists within group,
-and ignores external parents from different infra groups.
-FIXED: If oldest incident is linked to external group, skip only that oldest,
-then make second oldest the parent regardless of its external link status.
-Link all other incidents in group to this second oldest (chosen parent).
-UPDATED: Two-layer matching now AI-based using sentence-transformers:
-Layer 1 → Semantic similarity on short_description (broad match, threshold 0.85)
-Layer 2 → Semantic similarity on description (exact match, threshold 0.90)
-9o
-UPDATED: Alert-based filtering now done at API level via contact_type=event
-         Removed is_alert_based() and filter_alert_incidents() as no longer needed
-"""
+# Dev notes have been moved to readme.md
 
 """
 Install Required Libraries:
@@ -31,8 +14,11 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
+
+print(f"🕐 System Time : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 # ══════════════════════════════════════════════════════════
 #  CONFIG
@@ -265,6 +251,37 @@ def ask_permission(question):
 #  → Downloads ~90MB on first run, cached locally after
 # ══════════════════════════════════════════════════════════
 
+# def load_ai_model():
+#     """
+#     Loads the sentence-transformer AI model.
+#     Model: all-MiniLM-L6-v2
+#     - Small and fast (~90MB)
+#     - Great for sentence similarity tasks
+#     - Downloaded once, cached locally after first run
+#     Returns loaded model object
+#     """
+#     print(f"\n🤖 Loading AI Similarity Model...")
+#     print(f"   Model : all-MiniLM-L6-v2")
+#     #print(f"   Note  : Downloads ~90MB on first run only")
+#
+#     # Load the pre-trained sentence transformer model
+#     # This model converts text into numerical vectors (embeddings)
+#     # Sentences with similar meaning → similar vectors
+#     model = SentenceTransformer('all-MiniLM-L6-v2')
+#
+#     print(f"   ✅ AI Model loaded successfully!")
+#
+#     return model
+
+# ══════════════════════════════════════════════════════════
+#  FUNCTION: LOAD AI MODEL
+#  Loads sentence-transformer model for semantic similarity
+#  Model: all-MiniLM-L6-v2
+#  → Small, fast, accurate for sentence similarity
+#  → Downloads ~90MB on first run, cached locally after
+#  → cache_folder saves model locally so no re-download
+# ══════════════════════════════════════════════════════════
+
 def load_ai_model():
     """
     Loads the sentence-transformer AI model.
@@ -276,17 +293,27 @@ def load_ai_model():
     """
     print(f"\n🤖 Loading AI Similarity Model...")
     print(f"   Model : all-MiniLM-L6-v2")
-    #print(f"   Note  : Downloads ~90MB on first run only")
+
+    # ──────────────────────────────────────────────────────
+    #  Save model to local folder so it never needs
+    #  to contact HuggingFace again after first download
+    #  Change cache_folder path to wherever you want
+    # ──────────────────────────────────────────────────────
+    cache_folder = os.path.join(os.path.dirname(__file__), "ai_model_cache")
+    os.makedirs(cache_folder, exist_ok=True)
 
     # Load the pre-trained sentence transformer model
     # This model converts text into numerical vectors (embeddings)
     # Sentences with similar meaning → similar vectors
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer(
+        'all-MiniLM-L6-v2',
+        cache_folder = cache_folder
+    )
 
     print(f"   ✅ AI Model loaded successfully!")
+    print(f"   📁 Cache : {cache_folder}")
 
     return model
-
 
 # ══════════════════════════════════════════════════════════
 #  FUNCTION: GET AI SIMILARITY GROUPS
