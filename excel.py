@@ -42,7 +42,7 @@ COL_NUMBER       = "number"
 COL_SYS_ID       = "sys_id"
 COL_STATE        = "state"
 COL_CATEGORY     = "category"
-COL_SUB_CATEGORY = "sub_category"
+COL_SUB_CATEGORY = "subcategory"
 COL_SHORT_DESC   = "short_description"
 COL_PARENT       = "parent_incident"
 COL_CHILD_COUNT  = "child_incidents"
@@ -65,33 +65,11 @@ COL_PROCESSED_AT      = "processed_at"
 # ══════════════════════════════════════════════════════════
 
 def normalize_text(text):
-    """
-    Normalizes text for consistent matching:
-    1. Convert to lowercase
-    2. Remove special characters
-    3. Strip extra whitespace
-    4. Strip leading/trailing spaces
 
-    Args:
-        text → raw category or sub_category string
-
-    Returns:
-        Normalized string or None if empty
-    """
     if not text or str(text).strip() == "" or str(text).strip().lower() == "nan":
         return None
-
-    # ─── Convert to lowercase ─────────────────────────────
-    # "Network" → "network"
-    # "SERVER"  → "server"
     text = str(text).lower()
-
-    # ─── Remove special characters ────────────────────────
-    # Keep only letters, numbers, spaces
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
-
-    # ─── Remove extra whitespace ──────────────────────────
-    # "server  down" → "server down"
     text = re.sub(r'\s+', ' ', text).strip()
 
     return text if text else None
@@ -103,17 +81,7 @@ def normalize_text(text):
 # ══════════════════════════════════════════════════════════
 
 def get_parent_sys_id(parent_incident_field):
-    """
-    Extracts and returns parent sys_id string from
-    parent_incident field regardless of its type.
-    Returns None if no valid parent found.
 
-    Args:
-        parent_incident_field → value from parent_incident column
-
-    Returns:
-        sys_id string or None
-    """
     if parent_incident_field is None:
         return None
     if str(parent_incident_field).strip() == "":
@@ -129,17 +97,7 @@ def get_parent_sys_id(parent_incident_field):
 # ══════════════════════════════════════════════════════════
 
 def ask_permission(question):
-    """
-    Ask user Y/N question.
-    Returns True if Yes, False if No.
-    Keeps asking until valid input given.
 
-    Args:
-        question → string question to ask
-
-    Returns:
-        True if Y, False if N
-    """
     while True:
         answer = input(f"\n   {question} (Y/N): ").strip().upper()
 
@@ -159,10 +117,6 @@ def ask_permission(question):
 
 def fetch_data():
     """
-    Reads incident data from Excel file.
-    Later this function will be updated to
-    call ServiceNow API instead.
-
     Returns:
         pandas DataFrame with incident data
         or None if file not found / error
@@ -209,9 +163,6 @@ def fetch_data():
 
 def normalize_data(df):
     """
-    Adds normalized text columns to DataFrame.
-    Normalizes category and sub_category for matching.
-
     Normalization:
     → lowercase
     → remove special characters
@@ -228,11 +179,9 @@ def normalize_data(df):
     print(f"{'='*65}")
 
     # ─── Normalize category ───────────────────────────────
-    # Example: "Network Issues" → "network issues"
     df[COL_NORM_CATEGORY] = df[COL_CATEGORY].apply(normalize_text)
 
     # ─── Normalize sub_category ───────────────────────────
-    # Example: "Server Down!" → "server down"
     df[COL_NORM_SUB_CATEGORY] = df[COL_SUB_CATEGORY].apply(normalize_text)
 
     # ─── Print sample of normalization ────────────────────
@@ -240,7 +189,7 @@ def normalize_data(df):
     print(f"   {'Number':<12} {'Category':<20} {'Normalized':<20} {'SubCat':<20} {'Normalized'}")
     print(f"   {'-'*95}")
 
-    for _, row in df.head(10).iterrows():
+    for _, row in df.head(3).iterrows():
         print(
             f"   {str(row[COL_NUMBER]):<12} "
             f"{str(row[COL_CATEGORY]):<20} "
@@ -290,8 +239,6 @@ def find_similar_incidents(df):
     """
     print(f"\n{'='*65}")
     print(f"🔍 Finding Similar Incidents (Two-Layer Matching)...")
-    print(f"   Layer 1 → normalized_category")
-    print(f"   Layer 2 → normalized_sub_category")
     print(f"{'='*65}")
 
     all_subgroups = []
@@ -834,7 +781,6 @@ def main():
     elapsed_time = end_time - start_time
 
     print(f"\n{'='*65}")
-    print(f"   ✅ ALL DONE!")
     print(f"   → Data read from Excel")
     print(f"   → Category and Sub-Category normalized")
     print(f"   → Similar incidents identified (2-layer match)")
